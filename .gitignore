@@ -1,0 +1,7 @@
+node_modules/
+.env
+chat.db
+chat.db-journal
+uploads/
+.DS_Store
+frontend/dist/
