@@ -2,8 +2,16 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import EmojiPicker from 'emoji-picker-react';
-import { Send, LogOut, Paperclip, Mic, Square, File as FileIcon, Phone, Video, PhoneOff, PhoneIncoming, Smile, MicOff, VideoOff, RefreshCcw, Check, CheckCheck } from 'lucide-react';
+import { Send, LogOut, Paperclip, Mic, Square, File as FileIcon, Phone, Video, PhoneOff, PhoneIncoming, Sticker, MicOff, VideoOff, RefreshCcw, Check, CheckCheck } from 'lucide-react';
+
+const STICKERS = [
+  { id: 't1', url: 'https://media.tenor.com/E1G8y8e8X5wAAAAi/vadivelu-comedy.gif' },
+  { id: 't2', url: 'https://media.tenor.com/b4H-bIksQDEAAAAi/vadivel-vadivelu.gif' },
+  { id: 't3', url: 'https://media.tenor.com/8QWvN3p65L4AAAAi/goundamani-comedy.gif' },
+  { id: 'l1', url: 'https://media.tenor.com/F2K84I-n-68AAAAi/heart-love.gif' },
+  { id: 'l2', url: 'https://media.tenor.com/E4b0cZ4FkDEAAAAi/love-bear.gif' },
+  { id: 'l3', url: 'https://media.tenor.com/A6b-QvHq5N4AAAAi/love.gif' }
+];
 
 const BACKEND_URL = import.meta.env.PROD ? '' : 'http://localhost:5000';
 
@@ -12,7 +20,7 @@ const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [user, setUser] = useState(null);
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
   
   const fileInputRef = useRef(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -400,8 +408,9 @@ const Chat = () => {
     }
   };
 
-  const onEmojiClick = (emojiObj) => {
-    setInputText(prev => prev + emojiObj.emoji);
+  const sendSticker = (url) => {
+    socket.emit('sendMessage', { text: '', type: 'image', attachmentUrl: url, fileName: 'sticker' });
+    setShowStickerPicker(false);
   };
 
   const handleLogout = () => {
@@ -421,9 +430,10 @@ const Chat = () => {
 
   const renderMessageContent = (msg) => {
     if (msg.type === 'image' && msg.attachment_url) {
+      const src = msg.attachment_url.startsWith('http') ? msg.attachment_url : `${BACKEND_URL}${msg.attachment_url}`;
       return (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <img src={`${BACKEND_URL}${msg.attachment_url}`} alt="attachment" style={{ maxWidth: '100%', borderRadius: '12px' }} />
+          <img src={src} alt="attachment" style={{ maxWidth: '100%', borderRadius: '12px' }} />
           {msg.text && <span style={{ marginTop: '8px' }}>{msg.text}</span>}
         </div>
       );
@@ -536,18 +546,31 @@ const Chat = () => {
 
         <div className="chat-input-area" style={{ position: 'relative' }}>
           
-          {showEmojiPicker && (
-            <div className="emoji-picker-container">
-              <EmojiPicker onEmojiClick={onEmojiClick} theme="dark" width="100%" height={350} />
+          {showStickerPicker && (
+            <div className="sticker-picker-container" style={{
+               position: 'absolute', bottom: '80px', right: '10px', 
+               background: 'var(--glass-bg)', backdropFilter: 'blur(16px)', 
+               border: '1px solid var(--glass-border)', padding: '15px', 
+               borderRadius: '16px', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', 
+               gap: '10px', maxHeight: '300px', overflowY: 'auto', width: '280px', zIndex: 100
+            }}>
+              {STICKERS.map(s => (
+                 <img 
+                    key={s.id} 
+                    src={s.url} 
+                    onClick={() => sendSticker(s.url)} 
+                    style={{ width: '100%', height: '80px', objectFit: 'cover', borderRadius: '8px', cursor: 'pointer', backgroundColor: 'rgba(255,255,255,0.1)' }} 
+                 />
+              ))}
             </div>
           )}
 
           <button 
             type="button" 
             className="action-btn"
-            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+            onClick={() => setShowStickerPicker(!showStickerPicker)}
           >
-            <Smile size={20} />
+            <Sticker size={20} />
           </button>
 
           <button 
