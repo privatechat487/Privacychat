@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import { Send, LogOut, Paperclip, Mic, Square, File as FileIcon, Phone, Video, PhoneOff, PhoneIncoming } from 'lucide-react';
+import EmojiPicker from 'emoji-picker-react';
+import { Send, LogOut, Paperclip, Mic, Square, File as FileIcon, Phone, Video, PhoneOff, PhoneIncoming, Smile, MicOff, VideoOff, RefreshCcw } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.PROD ? '' : 'http://localhost:5000';
 
@@ -11,6 +12,7 @@ const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [user, setUser] = useState(null);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   
   const fileInputRef = useRef(null);
   const [isRecording, setIsRecording] = useState(false);
@@ -28,16 +30,20 @@ const Chat = () => {
   const [callAccepted, setCallAccepted] = useState(false);
   const [isVideo, setIsVideo] = useState(false);
   
+  // Call Option Enhancements
+  const [isMuted, setIsMuted] = useState(false);
+  const [isVideoDisabled, setIsVideoDisabled] = useState(false);
+  const [facingMode, setFacingMode] = useState("user");
+  
   const [remoteStreamState, setRemoteStreamState] = useState(null);
   const [localStreamState, setLocalStreamState] = useState(null);
 
   const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef();
+  const remoteVideoRef = useRef(null);
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
   const iceQueueRef = useRef([]);
 
-  // Bind video sources safely onto React renders
   useEffect(() => {
     if (callAccepted && remoteVideoRef.current && remoteStreamState) {
       remoteVideoRef.current.srcObject = remoteStreamState;
@@ -66,10 +72,13 @@ const Chat = () => {
     setReceivingCall(false);
     setCallAccepted(false);
     setIsVideo(false);
+    setIsMuted(false);
+    setIsVideoDisabled(false);
     setCallerName('');
     setCallerSignal(null);
     setRemoteStreamState(null);
     setLocalStreamState(null);
+    setFacingMode("user");
   };
 
   useEffect(() => {
@@ -119,7 +128,6 @@ const Chat = () => {
       setCallAccepted(true);
       if (peerConnectionRef.current) {
         await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
-        // Flush all queued ICE candidates securely
         while(iceQueueRef.current.length > 0) {
           const c = iceQueueRef.current.shift();
           peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(c)).catch(() => {});
@@ -140,16 +148,15 @@ const Chat = () => {
     });
 
     newSocket.on('callEnded', () => {
-      cleanupCall();
+      window.stopCallingInternal();
     });
 
     setSocket(newSocket);
 
-    // Provide a global window access strictly for socket closure inside cleanup
-    window.hardDisconnectWebRTC = cleanupCall;
+    window.stopCallingInternal = cleanupCall;
 
     return () => {
-      if(window.hardDisconnectWebRTC) window.hardDisconnectWebRTC();
+      if(window.stopCallingInternal) window.stopCallingInternal();
       newSocket.close();
     };
   }, [navigate]);
@@ -163,7 +170,10 @@ const Chat = () => {
     setCalling(true);
     
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video, audio: true });
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: video ? { facingMode: "user" } : false, 
+        audio: true 
+      });
       localStreamRef.current = mediaStream;
       setLocalStreamState(mediaStream);
       
@@ -196,7 +206,10 @@ const Chat = () => {
   const answerCall = async () => {
     setCallAccepted(true);
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: isVideo, audio: true });
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: isVideo ? { facingMode: "user" } : false, 
+        audio: true 
+      });
       localStreamRef.current = mediaStream;
       setLocalStreamState(mediaStream);
       
@@ -217,7 +230,6 @@ const Chat = () => {
 
       await peer.setRemoteDescription(new RTCSessionDescription(callerSignal));
       
-      // Dump queued ICEs 
       while(iceQueueRef.current.length > 0) {
         const c = iceQueueRef.current.shift();
         peer.addIceCandidate(new RTCIceCandidate(c)).catch(()=>{});
@@ -239,6 +251,62 @@ const Chat = () => {
     cleanupCall();
     if (socket) socket.emit('endCall');
   };
+
+  // Call WebRTC Options
+  const toggleMute = () => {
+    if (localStreamRef.current) {
+      const audioTrack = localStreamRef.current.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = !audioTrack.enabled;
+        setIsMuted(!audioTrack.enabled);
+      }
+    }
+  };
+
+  const toggleVideoLayer = () => {
+    if (localStreamRef.current) {
+      const videoTrack = localStreamRef.current.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = !videoTrack.enabled;
+        setIsVideoDisabled(!videoTrack.enabled);
+      }
+    }
+  };
+
+  const switchCamera = async () => {
+    if (!isVideo || !localStreamRef.current) return;
+    try {
+      const newMode = facingMode === "user" ? "environment" : "user";
+      
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: newMode },
+        audio: true
+      });
+
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+
+      localStreamRef.current = newStream;
+      setLocalStreamState(newStream);
+      setFacingMode(newMode);
+
+      if (isMuted) newStream.getAudioTracks()[0].enabled = false;
+      if (isVideoDisabled) newStream.getVideoTracks()[0].enabled = false;
+
+      if (peerConnectionRef.current) {
+        const videoSender = peerConnectionRef.current.getSenders().find(s => s.track && s.track.kind === 'video');
+        if (videoSender && newStream.getVideoTracks()[0]) {
+          videoSender.replaceTrack(newStream.getVideoTracks()[0]);
+        }
+        const audioSender = peerConnectionRef.current.getSenders().find(s => s.track && s.track.kind === 'audio');
+        if (audioSender && newStream.getAudioTracks()[0]) {
+          audioSender.replaceTrack(newStream.getAudioTracks()[0]);
+        }
+      }
+    } catch (e) {
+      console.error('Switch camera failed', e);
+    }
+  };
+
 
   const handleSend = (e) => {
     e.preventDefault();
@@ -305,6 +373,10 @@ const Chat = () => {
     }
   };
 
+  const onEmojiClick = (emojiObj) => {
+    setInputText(prev => prev + emojiObj.emoji);
+  };
+
   const handleLogout = () => {
     cleanupCall();
     localStorage.removeItem('token');
@@ -353,7 +425,7 @@ const Chat = () => {
     <div className="chat-wrapper">
       {(calling || receivingCall) && (
         <div className="call-overlay">
-          <div className="call-box">
+          <div className="call-box" style={{ padding: callAccepted ? '20px' : '40px'}}>
             {!callAccepted && receivingCall ? (
               <div className="incoming-call">
                 <PhoneIncoming size={48} className="pulse-icon" />
@@ -373,11 +445,28 @@ const Chat = () => {
             ) : callAccepted ? (
               <div className="active-call">
                 <div className={`video-container ${!isVideo ? 'voice-only' : ''}`}>
-                   <video playsInline ref={remoteVideoRef} autoPlay className="remote-video" style={{ display: isVideo ? 'block' : 'none' }} />
-                   <video playsInline ref={localVideoRef} autoPlay muted className="local-video" style={{ display: isVideo ? 'block' : 'none' }} />
-                   {!isVideo && <div className="voice-placeholder"><Mic size={64} className="pulse-icon"/></div>}
+                   <video playsInline ref={remoteVideoRef} autoPlay className="remote-video" style={{ display: (isVideo && remoteStreamState?.getVideoTracks()?.length > 0) ? 'block' : 'none' }} />
+                   <video playsInline ref={localVideoRef} autoPlay muted className="local-video" style={{ display: (isVideo && !isVideoDisabled) ? 'block' : 'none', transform: facingMode === 'user' ? 'scaleX(-1)' : 'none' }} />
+                   {(!isVideo || isVideoDisabled || !remoteStreamState?.getVideoTracks()?.length) && <div className="voice-placeholder" style={{display:'flex', justifyContent:'center', alignItems:'center', height:'100%'}}><Mic size={64} className="pulse-icon"/></div>}
                 </div>
-                <button className="reject-btn" onClick={endCall}><PhoneOff size={24}/></button>
+                
+                <div className="call-control-bar">
+                   <button className={`call-btn ${isMuted ? 'off' : ''}`} onClick={toggleMute}>
+                     {isMuted ? <MicOff size={24} /> : <Mic size={24} />}
+                   </button>
+                   {isVideo && (
+                     <>
+                       <button className={`call-btn ${isVideoDisabled ? 'off' : ''}`} onClick={toggleVideoLayer}>
+                         {isVideoDisabled ? <VideoOff size={24} /> : <Video size={24} />}
+                       </button>
+                       <button className="call-btn" onClick={switchCamera}>
+                         <RefreshCcw size={24} />
+                       </button>
+                     </>
+                   )}
+                   <button className="call-btn off" onClick={endCall}><PhoneOff size={24}/></button>
+                </div>
+
               </div>
             ) : null}
           </div>
@@ -413,7 +502,22 @@ const Chat = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="chat-input-area">
+        <div className="chat-input-area" style={{ position: 'relative' }}>
+          
+          {showEmojiPicker && (
+            <div className="emoji-picker-container">
+              <EmojiPicker onEmojiClick={onEmojiClick} theme="dark" />
+            </div>
+          )}
+
+          <button 
+            type="button" 
+            className="action-btn"
+            onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+          >
+            <Smile size={20} />
+          </button>
+
           <button 
             type="button" 
             className="action-btn"

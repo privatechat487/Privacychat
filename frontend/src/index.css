@@ -525,6 +525,49 @@ select.auth-input option {
   border-radius: 12px;
   border: 2px solid white;
   box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+  transform: scaleX(-1);
+}
+
+.call-control-bar {
+  display: flex;
+  gap: 15px;
+  margin-top: 20px;
+  background: rgba(0,0,0,0.5);
+  padding: 15px 25px;
+  border-radius: 40px;
+  align-items: center;
+}
+
+.call-btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255,255,255,0.2);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  transition: all 0.2s ease;
+}
+
+.call-btn:hover {
+  background: rgba(255,255,255,0.3);
+  transform: scale(1.1);
+}
+
+.call-btn.off {
+  background: #ff7675;
+}
+
+.emoji-picker-container {
+  position: absolute;
+  bottom: 90px;
+  right: 20px;
+  z-index: 50;
+  box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+  border-radius: 8px;
 }
 
 @media screen and (max-width: 768px) {
