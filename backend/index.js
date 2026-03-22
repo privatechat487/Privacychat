@@ -193,6 +193,23 @@ io.on('connection', (socket) => {
     }
   });
 
+  // WebRTC Signaling Channels
+  socket.on('callUser', (data) => {
+    socket.broadcast.emit('callIncoming', { from: socket.user.username, offer: data.offer, isVideo: data.isVideo });
+  });
+
+  socket.on('answerCall', (data) => {
+    socket.broadcast.emit('callAccepted', data.answer);
+  });
+
+  socket.on('iceCandidate', (data) => {
+    socket.broadcast.emit('iceCandidate', data.candidate);
+  });
+
+  socket.on('endCall', () => {
+    socket.broadcast.emit('callEnded');
+  });
+
   socket.on('disconnect', () => {
     console.log('User disconnected:', socket.user.username);
   });

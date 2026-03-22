@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import axios from 'axios';
-import { Send, LogOut, Paperclip, Mic, Square, File as FileIcon } from 'lucide-react';
+import { Send, LogOut, Paperclip, Mic, Square, File as FileIcon, Phone, Video, PhoneOff, PhoneIncoming } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.PROD ? '' : 'http://localhost:5000';
 
@@ -20,6 +20,19 @@ const Chat = () => {
 
   const messagesEndRef = useRef(null);
   const navigate = useNavigate();
+
+  // WebRTC States
+  const [calling, setCalling] = useState(false);
+  const [receivingCall, setReceivingCall] = useState(false);
+  const [callerName, setCallerName] = useState('');
+  const [callerSignal, setCallerSignal] = useState(null);
+  const [callAccepted, setCallAccepted] = useState(false);
+  const [isVideo, setIsVideo] = useState(false);
+  
+  const localVideoRef = useRef();
+  const remoteVideoRef = useRef();
+  const peerConnectionRef = useRef(null);
+  const localStreamRef = useRef(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -57,9 +70,39 @@ const Chat = () => {
       setMessages((prev) => prev.filter(m => m.id !== msgId));
     });
 
+    // WebRTC Listeners
+    newSocket.on('callIncoming', (data) => {
+      setReceivingCall(true);
+      setCallerName(data.from);
+      setCallerSignal(data.offer);
+      setIsVideo(data.isVideo);
+    });
+
+    newSocket.on('callAccepted', async (answer) => {
+      setCallAccepted(true);
+      if (peerConnectionRef.current) {
+        await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+    });
+
+    newSocket.on('iceCandidate', async (candidate) => {
+      if (peerConnectionRef.current && candidate) {
+        try {
+          await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch(e) { console.error('ICE error', e); }
+      }
+    });
+
+    newSocket.on('callEnded', () => {
+      cleanupCall();
+    });
+
     setSocket(newSocket);
 
-    return () => newSocket.close();
+    return () => {
+      cleanupCall();
+      newSocket.close();
+    };
   }, [navigate]);
 
   useEffect(() => {
@@ -106,18 +149,15 @@ const Chat = () => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       uploadFile(file);
-      // reset input
       e.target.value = null;
     }
   };
 
   const toggleRecording = async () => {
     if (isRecording) {
-      // Stop recording
       mediaRecorderRef.current.stop();
       setIsRecording(false);
     } else {
-      // Start recording
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mediaRecorder = new MediaRecorder(stream);
@@ -132,7 +172,6 @@ const Chat = () => {
           const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
           const file = new File([audioBlob], 'voice-message.webm', { type: 'audio/webm' });
           uploadFile(file, 'audio');
-          // Stop all audio tracks
           stream.getTracks().forEach(track => track.stop());
         };
 
@@ -140,12 +179,108 @@ const Chat = () => {
         setIsRecording(true);
       } catch (err) {
         console.error("Microphone access denied or error:", err);
-        alert("Cannot access microphone. Ensure permissions are granted.");
+        alert("Cannot access microphone.");
       }
     }
   };
 
+  const cleanupCall = () => {
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+      localStreamRef.current = null;
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+      peerConnectionRef.current = null;
+    }
+    setCalling(false);
+    setReceivingCall(false);
+    setCallAccepted(false);
+    setIsVideo(false);
+    setCallerName('');
+    setCallerSignal(null);
+  };
+
+  const startCall = async (video) => {
+    setIsVideo(video);
+    setCalling(true);
+    
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video, audio: true });
+      localStreamRef.current = mediaStream;
+      if (localVideoRef.current) localVideoRef.current.srcObject = mediaStream;
+
+      const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      peerConnectionRef.current = peer;
+
+      mediaStream.getTracks().forEach(track => peer.addTrack(track, mediaStream));
+
+      peer.onicecandidate = (event) => {
+        if (event.candidate && socket) {
+          socket.emit('iceCandidate', { candidate: event.candidate });
+        }
+      };
+
+      peer.ontrack = (event) => {
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+        }
+      };
+
+      const offer = await peer.createOffer();
+      await peer.setLocalDescription(offer);
+      socket.emit('callUser', { offer, isVideo: video });
+
+    } catch (e) {
+      console.error(e);
+      alert('Could not access Camera or Microphone. Please grant permissions.');
+      cleanupCall();
+    }
+  };
+
+  const answerCall = async () => {
+    setCallAccepted(true);
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ video: isVideo, audio: true });
+      localStreamRef.current = mediaStream;
+      if (localVideoRef.current) localVideoRef.current.srcObject = mediaStream;
+
+      const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      peerConnectionRef.current = peer;
+
+      mediaStream.getTracks().forEach(track => peer.addTrack(track, mediaStream));
+
+      peer.onicecandidate = (event) => {
+        if (event.candidate && socket) {
+          socket.emit('iceCandidate', { candidate: event.candidate });
+        }
+      };
+
+      peer.ontrack = (event) => {
+        if (remoteVideoRef.current) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+        }
+      };
+
+      await peer.setRemoteDescription(new RTCSessionDescription(callerSignal));
+      const answer = await peer.createAnswer();
+      await peer.setLocalDescription(answer);
+      
+      socket.emit('answerCall', { answer });
+    } catch (e) {
+      console.error(e);
+      cleanupCall();
+      if(socket) socket.emit('endCall');
+    }
+  };
+
+  const endCall = () => {
+    cleanupCall();
+    if (socket) socket.emit('endCall');
+  };
+
   const handleLogout = () => {
+    cleanupCall();
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     if (socket) socket.close();
@@ -190,15 +325,52 @@ const Chat = () => {
 
   return (
     <div className="chat-wrapper">
+      {(calling || receivingCall) && (
+        <div className="call-overlay">
+          <div className="call-box">
+            {!callAccepted && receivingCall ? (
+              <div className="incoming-call">
+                <PhoneIncoming size={48} className="pulse-icon" />
+                <h3>{callerName} is calling...</h3>
+                <p>{isVideo ? 'Video Call' : 'Voice Call'}</p>
+                <div className="call-actions">
+                  <button className="reject-btn" onClick={endCall}><PhoneOff size={24}/></button>
+                  <button className="accept-btn" onClick={answerCall}><Phone size={24}/></button>
+                </div>
+              </div>
+            ) : !callAccepted && calling ? (
+              <div className="outgoing-call">
+                <h3>Calling...</h3>
+                <p>{isVideo ? 'Video' : 'Voice'}</p>
+                <button className="reject-btn" onClick={endCall}><PhoneOff size={24}/></button>
+              </div>
+            ) : callAccepted ? (
+              <div className="active-call">
+                <div className={`video-container ${!isVideo ? 'voice-only' : ''}`}>
+                   <video playsInline ref={remoteVideoRef} autoPlay className="remote-video" style={{ display: isVideo ? 'block' : 'none' }} />
+                   <video playsInline ref={localVideoRef} autoPlay muted className="local-video" style={{ display: isVideo ? 'block' : 'none' }} />
+                   {!isVideo && <div className="voice-placeholder"><Mic size={64} className="pulse-icon"/></div>}
+                </div>
+                <button className="reject-btn" onClick={endCall}><PhoneOff size={24}/></button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
       <div className="chat-container">
         <div className="chat-header">
           <h2>
             <span style={{ fontSize: '1.5rem', fontWeight: 700 }}>ViRaj Connect</span>
             <div className="status-dot"></div>
           </h2>
-          <button className="logout-btn" onClick={handleLogout}>
-            <LogOut size={16} /> Exit
-          </button>
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            <button className="icon-btn" onClick={() => startCall(false)} title="Voice Call"><Phone size={20} /></button>
+            <button className="icon-btn" onClick={() => startCall(true)} title="Video Call"><Video size={20} /></button>
+            <button className="logout-btn" onClick={handleLogout}>
+              <LogOut size={16} /> Exit
+            </button>
+          </div>
         </div>
         
         <div className="chat-messages">
