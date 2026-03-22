@@ -16,6 +16,8 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config();
 
+const JWT_SECRET = process.env.JWT_SECRET || 'viraj-connect-secret-core-152712';
+
 // Ensure uploads folder exists
 const uploadDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadDir)) {
@@ -53,7 +55,7 @@ io.use((socket, next) => {
     return next(new Error('Authentication error'));
   }
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     socket.user = decoded;
     next();
   } catch (err) {
@@ -90,7 +92,7 @@ app.post('/api/login', async (req, res) => {
       }
     }
 
-    const token = jwt.sign({ id: user.id, username: user.username }, process.env.JWT_SECRET);
+    const token = jwt.sign({ id: user.id, username: user.username }, JWT_SECRET);
     res.json({ token, user: { id: user.id, username: user.username } });
   } catch (error) {
     console.error(error);
@@ -104,7 +106,7 @@ const authMiddleware = (req, res, next) => {
   
   const token = authHeader.split(' ')[1];
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const decoded = jwt.verify(token, JWT_SECRET);
     req.user = decoded;
     next();
   } catch (error) {
