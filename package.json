@@ -2,7 +2,12 @@
   "name": "viraj-connect",
   "version": "1.0.0",
   "description": "Monorepo root for ViRaj Connect chat app",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
+    "start": "npm start --prefix backend",
+    "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
     "start:dev": "concurrently \"npm run dev --prefix backend\" \"npm run dev --prefix frontend\""
   },
   "devDependencies": {
