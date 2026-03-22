@@ -128,26 +128,17 @@ app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
   });
 });
 
-app.get('/api/messages', authMiddleware, async (req, res) => {
-  try {
-    const db = await getDb();
-    const messages = await db.all(`
-      SELECT m.id, m.text, m.type, m.attachment_url, m.file_name, m.timestamp, u.username as sender 
-      FROM messages m
-      JOIN users u ON m.sender_id = u.id
-      ORDER BY m.timestamp ASC
-    `);
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ error: 'Internal server error' });
-  }
+const ephemeralMessages = [];
+
+app.get('/api/messages', authMiddleware, (req, res) => {
+  res.json(ephemeralMessages);
 });
 
 // Serve frontend in production
 const frontendPath = path.join(__dirname, '../frontend/dist');
 app.use(express.static(frontendPath));
 
-app.get('*', (req, res) => {
+app.use((req, res, next) => {
   res.sendFile(path.join(frontendPath, 'index.html'));
 });
 
@@ -157,27 +148,46 @@ io.on('connection', (socket) => {
   socket.on('sendMessage', async (msgData) => {
     // msgData: { text, type, attachmentUrl, fileName }
     try {
-      const db = await getDb();
+      const msgId = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
       const text = msgData.text || '';
       const type = msgData.type || 'text';
       const attachmentUrl = msgData.attachmentUrl || null;
       const fileName = msgData.fileName || null;
 
-      const result = await db.run(
-        'INSERT INTO messages (sender_id, text, type, attachment_url, file_name) VALUES (?, ?, ?, ?, ?)', 
-        [socket.user.id, text, type, attachmentUrl, fileName]
-      );
+      const savedMessage = {
+        id: msgId,
+        text,
+        type,
+        attachment_url: attachmentUrl,
+        file_name: fileName,
+        timestamp: new Date().toISOString(),
+        sender: socket.user.username
+      };
       
-      const savedMessage = await db.get(`
-        SELECT m.id, m.text, m.type, m.attachment_url, m.file_name, m.timestamp, u.username as sender 
-        FROM messages m
-        JOIN users u ON m.sender_id = u.id
-        WHERE m.id = ?
-      `, [result.lastID]);
-
+      ephemeralMessages.push(savedMessage);
       io.emit('receiveMessage', savedMessage);
+
+      // Auto-delete after 3 minutes
+      setTimeout(() => {
+        const idx = ephemeralMessages.findIndex(m => m.id === msgId);
+        if (idx !== -1) {
+          ephemeralMessages.splice(idx, 1);
+        }
+        io.emit('deleteMessage', msgId);
+        
+        // Delete physical attachment if it exists
+        if (attachmentUrl) {
+          const filePath = path.join(__dirname, attachmentUrl);
+          if (fs.existsSync(filePath)) {
+            try {
+              fs.unlinkSync(filePath);
+            } catch(e) {}
+          }
+        }
+      }, 3 * 60 * 1000);
+
     } catch (error) {
-      console.error('Failed to save message', error);
+      console.error('Failed to process message', error);
     }
   });
 

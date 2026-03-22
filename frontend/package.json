@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start:dev": "cd .. && npm run start:dev"
   },
   "dependencies": {
     "axios": "^1.13.6",

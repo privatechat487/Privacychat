@@ -23,16 +23,13 @@ body {
   background-attachment: fixed;
   color: var(--text-primary);
   min-height: 100vh;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  overflow: hidden;
+  /* Completely native scrolling */
 }
 
-/* Background animated or static blobs */
+/* Background blobs */
 body::before, body::after {
   content: '';
-  position: absolute;
+  position: fixed; /* Keep background static */
   width: 400px;
   height: 400px;
   border-radius: 50%;
@@ -66,8 +63,8 @@ body::after {
   display: flex;
   justify-content: center;
   align-items: center;
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  min-height: 100vh;
 }
 
 .auth-container {
@@ -128,6 +125,11 @@ body::after {
   box-shadow: 0 0 10px rgba(108, 92, 231, 0.3);
 }
 
+select.auth-input option {
+  color: #000;
+  background: #fff;
+}
+
 .auth-btn {
   width: 100%;
   padding: 14px;
@@ -153,10 +155,9 @@ body::after {
   text-align: center;
 }
 
-/* Chat container */
 .chat-wrapper {
   width: 100%;
-  height: 100%;
+  min-height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -166,8 +167,7 @@ body::after {
 .chat-container {
   width: 100%;
   max-width: 900px;
-  height: 100%;
-  max-height: 85vh;
+  height: 85vh;
   background: var(--glass-bg);
   backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
@@ -234,13 +234,12 @@ body::after {
 .chat-messages {
   flex: 1;
   padding: 24px;
-  overflow-y: auto;
+  overflow-y: auto; /* Reverting to default scrolling natively attached to this div! */
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-/* Scrollbar styles */
 .chat-messages::-webkit-scrollbar {
   width: 6px;
 }
@@ -392,4 +391,53 @@ body::after {
   background: rgba(108, 92, 231, 0.3);
   cursor: not-allowed;
   color: rgba(255,255,255,0.5);
+}
+
+@media screen and (max-width: 768px) {
+  .chat-wrapper {
+    padding: 0;
+    align-items: flex-start; /* This totally disables flex vertical pushing off-screen on extreme keyboards */
+  }
+  
+  .chat-container {
+    height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+  
+  .auth-container {
+    padding: 24px;
+    margin: 20px;
+    border-radius: 16px;
+  }
+  
+  .auth-title {
+    font-size: 2rem;
+  }
+  
+  .chat-header h2 {
+    font-size: 1.2rem;
+  }
+  
+  .chat-input-area {
+    padding: 12px 16px;
+    gap: 8px;
+  }
+  
+  .chat-input {
+    padding: 12px 16px;
+  }
+  
+  .send-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .action-btn {
+    padding: 6px;
+  }
+
+  .message-wrapper {
+    max-width: 85%;
+  }
 }

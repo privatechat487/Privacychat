@@ -43,13 +43,15 @@ const Login = () => {
       <form onSubmit={handleLogin} style={{display: 'flex', flexDirection: 'column', gap: '20px'}}>
         <div className="input-group">
           <label>Who are you?</label>
-          <input 
-            type="text" 
+          <select 
             className="auth-input" 
-            placeholder="Your name" 
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-          />
+          >
+            <option value="" disabled>Select your name...</option>
+            <option value="Vimal">Vimal</option>
+            <option value="Raj">Raj</option>
+          </select>
         </div>
         
         <div className="input-group">

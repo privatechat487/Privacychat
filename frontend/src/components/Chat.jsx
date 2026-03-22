@@ -53,6 +53,10 @@ const Chat = () => {
       setMessages((prev) => [...prev, message]);
     });
 
+    newSocket.on('deleteMessage', (msgId) => {
+      setMessages((prev) => prev.filter(m => m.id !== msgId));
+    });
+
     setSocket(newSocket);
 
     return () => newSocket.close();
@@ -148,10 +152,11 @@ const Chat = () => {
     navigate('/login');
   };
 
-  const formatTime = (isoString) => {
-    const date = new Date(isoString);
+  const formatDateTime = (isoString) => {
+    const safeString = isoString.endsWith('Z') ? isoString : isoString + 'Z';
+    const date = new Date(safeString);
     if(isNaN(date.getTime())) return '';
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
   const renderMessageContent = (msg) => {
@@ -203,7 +208,7 @@ const Chat = () => {
               <div key={msg.id || index} className={`message-wrapper ${isMine ? 'mine' : 'other'}`}>
                 {!isMine && <div className="message-sender">{msg.sender}</div>}
                 <div className="message-bubble">{renderMessageContent(msg)}</div>
-                <div className="message-time">{msg.timestamp ? formatTime(msg.timestamp + 'Z') : ''}</div>
+                <div className="message-time">{msg.timestamp ? formatDateTime(msg.timestamp) : ''}</div>
               </div>
             );
           })}
