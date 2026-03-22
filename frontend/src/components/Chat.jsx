@@ -5,12 +5,12 @@ import axios from 'axios';
 import { Send, LogOut, Paperclip, Mic, Square, File as FileIcon, Phone, Video, PhoneOff, PhoneIncoming, Sticker, MicOff, VideoOff, RefreshCcw, Check, CheckCheck } from 'lucide-react';
 
 const STICKERS = [
-  { id: 't1', url: 'https://media.tenor.com/E1G8y8e8X5wAAAAi/vadivelu-comedy.gif' },
-  { id: 't2', url: 'https://media.tenor.com/b4H-bIksQDEAAAAi/vadivel-vadivelu.gif' },
-  { id: 't3', url: 'https://media.tenor.com/8QWvN3p65L4AAAAi/goundamani-comedy.gif' },
-  { id: 'l1', url: 'https://media.tenor.com/F2K84I-n-68AAAAi/heart-love.gif' },
-  { id: 'l2', url: 'https://media.tenor.com/E4b0cZ4FkDEAAAAi/love-bear.gif' },
-  { id: 'l3', url: 'https://media.tenor.com/A6b-QvHq5N4AAAAi/love.gif' }
+  { id: 't1', url: 'stickers/tamil_comedy_1.png' },
+  { id: 't2', url: 'stickers/tamil_comedy_2.png' },
+  { id: 't3', url: 'stickers/tamil_comedy_3.png' },
+  { id: 'l1', url: 'stickers/love_1.png' },
+  { id: 'l2', url: 'stickers/love_2.png' },
+  { id: 'l3', url: 'stickers/love_3.png' }
 ];
 
 const BACKEND_URL = import.meta.env.PROD ? '' : 'http://localhost:5000';
@@ -430,7 +430,10 @@ const Chat = () => {
 
   const renderMessageContent = (msg) => {
     if (msg.type === 'image' && msg.attachment_url) {
-      const src = msg.attachment_url.startsWith('http') ? msg.attachment_url : `${BACKEND_URL}${msg.attachment_url}`;
+      let src = msg.attachment_url;
+      if (!src.startsWith('http') && !src.startsWith('stickers/')) {
+        src = `${BACKEND_URL}${src}`;
+      }
       return (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <img src={src} alt="attachment" style={{ maxWidth: '100%', borderRadius: '12px' }} />
