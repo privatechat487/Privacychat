@@ -29,9 +29,9 @@ const Chat = () => {
   const [isVideo, setIsVideo] = useState(false);
   
   const [remoteStreamState, setRemoteStreamState] = useState(null);
-  const [, setRefresh] = useState(0);
+  const [localStreamState, setLocalStreamState] = useState(null);
 
-  const localVideoRef = useRef();
+  const localVideoRef = useRef(null);
   const remoteVideoRef = useRef();
   const peerConnectionRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -46,10 +46,11 @@ const Chat = () => {
   }, [callAccepted, remoteStreamState]);
 
   useEffect(() => {
-    if ((calling || callAccepted) && localVideoRef.current && localStreamRef.current) {
-      localVideoRef.current.srcObject = localStreamRef.current;
+    if ((calling || callAccepted) && localVideoRef.current && localStreamState) {
+      localVideoRef.current.srcObject = localStreamState;
+      localVideoRef.current.play().catch(e=>console.log('Video play policy issue', e));
     }
-  }, [calling, callAccepted]);
+  }, [calling, callAccepted, localStreamState]);
 
   const cleanupCall = () => {
     if (localStreamRef.current) {
@@ -68,6 +69,7 @@ const Chat = () => {
     setCallerName('');
     setCallerSignal(null);
     setRemoteStreamState(null);
+    setLocalStreamState(null);
   };
 
   useEffect(() => {
@@ -163,7 +165,7 @@ const Chat = () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video, audio: true });
       localStreamRef.current = mediaStream;
-      setRefresh(v=>v+1); // Force state trigger for local stream mount
+      setLocalStreamState(mediaStream);
       
       const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       peerConnectionRef.current = peer;
@@ -196,7 +198,7 @@ const Chat = () => {
     try {
       const mediaStream = await navigator.mediaDevices.getUserMedia({ video: isVideo, audio: true });
       localStreamRef.current = mediaStream;
-      setRefresh(v=>v+1);
+      setLocalStreamState(mediaStream);
       
       const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
       peerConnectionRef.current = peer;
