@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import axios from 'axios';
 import EmojiPicker from 'emoji-picker-react';
-import { Send, LogOut, Paperclip, Mic, Square, File as FileIcon, Phone, Video, PhoneOff, PhoneIncoming, Smile, MicOff, VideoOff, RefreshCcw } from 'lucide-react';
+import { Send, LogOut, Paperclip, Mic, Square, File as FileIcon, Phone, Video, PhoneOff, PhoneIncoming, Smile, MicOff, VideoOff, RefreshCcw, Check, CheckCheck } from 'lucide-react';
 
 const BACKEND_URL = import.meta.env.PROD ? '' : 'http://localhost:5000';
 
@@ -110,8 +110,34 @@ const Chat = () => {
     });
 
     newSocket.on('receiveMessage', (message) => {
-      setMessages((prev) => [...prev, message]);
+      setMessages((prev) => {
+         if (prev.find(m => m.id === message.id)) return prev;
+         return [...prev, message];
+      });
+      if (message.sender !== storedUser.username) {
+        newSocket.emit('markDelivered', message.id);
+        if (document.hasFocus()) newSocket.emit('markRead', message.id);
+      }
     });
+
+    newSocket.on('messageStatus', ({ id, status }) => {
+      setMessages(prev => prev.map(m => m.id === id ? { 
+         ...m, 
+         status: status === 'read' ? 'read' : m.status === 'read' ? 'read' : status 
+      } : m));
+    });
+
+    const handleFocus = () => {
+      setMessages(prev => {
+        prev.forEach(m => {
+          if (m.sender !== storedUser.username && m.status !== 'read') {
+            newSocket.emit('markRead', m.id);
+          }
+        });
+        return prev;
+      });
+    };
+    window.addEventListener('focus', handleFocus);
 
     newSocket.on('deleteMessage', (msgId) => {
       setMessages((prev) => prev.filter(m => m.id !== msgId));
@@ -156,6 +182,7 @@ const Chat = () => {
     window.stopCallingInternal = cleanupCall;
 
     return () => {
+      window.removeEventListener('focus', handleFocus);
       if(window.stopCallingInternal) window.stopCallingInternal();
       newSocket.close();
     };
@@ -495,7 +522,12 @@ const Chat = () => {
               <div key={msg.id || index} className={`message-wrapper ${isMine ? 'mine' : 'other'}`}>
                 {!isMine && <div className="message-sender">{msg.sender}</div>}
                 <div className="message-bubble">{renderMessageContent(msg)}</div>
-                <div className="message-time">{msg.timestamp ? formatDateTime(msg.timestamp) : ''}</div>
+                <div className="message-time">
+                   {msg.timestamp ? formatDateTime(msg.timestamp) : ''}
+                   {isMine && msg.status === 'read' && <CheckCheck size={14} color="#34B7F1" style={{marginLeft: 4, verticalAlign: 'text-bottom'}}/>}
+                   {isMine && msg.status === 'delivered' && <CheckCheck size={14} color="grey" style={{marginLeft: 4, verticalAlign: 'text-bottom'}}/>}
+                   {isMine && (!msg.status || msg.status === 'sent') && <Check size={14} color="grey" style={{marginLeft: 4, verticalAlign: 'text-bottom'}}/>}
+                </div>
               </div>
             );
           })}
@@ -506,7 +538,7 @@ const Chat = () => {
           
           {showEmojiPicker && (
             <div className="emoji-picker-container">
-              <EmojiPicker onEmojiClick={onEmojiClick} theme="dark" />
+              <EmojiPicker onEmojiClick={onEmojiClick} theme="dark" width="100%" height={350} />
             </div>
           )}
 

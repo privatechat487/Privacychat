@@ -163,7 +163,8 @@ io.on('connection', (socket) => {
         attachment_url: attachmentUrl,
         file_name: fileName,
         timestamp: new Date().toISOString(),
-        sender: socket.user.username
+        sender: socket.user.username,
+        status: 'sent'
       };
       
       ephemeralMessages.push(savedMessage);
@@ -208,6 +209,24 @@ io.on('connection', (socket) => {
 
   socket.on('endCall', () => {
     socket.broadcast.emit('callEnded');
+  });
+
+  // Message Tracking (WhatsApp Tick system)
+  socket.on('markDelivered', (msgId) => {
+    const msg = ephemeralMessages.find(m => m.id === msgId);
+    if (msg && msg.status !== 'read') {
+      msg.status = 'delivered';
+      io.emit('messageStatus', { id: msgId, status: 'delivered' });
+    }
+  });
+
+  socket.on('markRead', (msgId) => {
+    const msg = ephemeralMessages.find(m => m.id === msgId);
+    if (msg && msg.status !== 'read') {
+      msg.status = 'read';
+      // Broadcast to everybody that this specific message was read
+      io.emit('messageStatus', { id: msgId, status: 'read' });
+    }
   });
 
   socket.on('disconnect', () => {
