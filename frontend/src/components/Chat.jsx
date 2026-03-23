@@ -128,10 +128,14 @@ const Chat = () => {
     
     setUser(storedUser);
 
-    axios.get(`${BACKEND_URL}/api/messages`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).then(res => setMessages(res.data))
-      .catch(err => console.error("Failed to load messages:", err));
+    const fetchMessages = () => {
+      axios.get(`${BACKEND_URL}/api/messages`, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => setMessages(res.data))
+        .catch(err => console.error("Failed to load messages:", err));
+    };
+
+    fetchMessages();
 
     axios.get(`${BACKEND_URL}/api/users`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -146,7 +150,6 @@ const Chat = () => {
       setStatuses(prev => ({ ...prev, ...statusMap }));
     }).catch(err => {
        console.error("Failed to load users:", err);
-       // If backend is unreachable, it sometimes leads to blank page due to logic waiting for users
        setUsers({ [storedUser.username]: storedUser.profilePic }); 
     });
 
@@ -227,6 +230,7 @@ const Chat = () => {
     });
 
     const handleFocus = () => {
+      fetchMessages(); // SYNC ON FOCUS
       setMessages(prev => {
         prev.forEach(m => {
           if (m.sender !== storedUser.username && m.status !== 'read') {
@@ -237,6 +241,9 @@ const Chat = () => {
       });
     };
     window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') handleFocus();
+    });
 
     newSocket.on('deleteMessage', (msgId) => {
       setMessages((prev) => prev.filter(m => m.id !== msgId));
