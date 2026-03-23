@@ -114,6 +114,7 @@ const Chat = () => {
     setRemoteStreamState(null);
     setLocalStreamState(null);
     setFacingMode("user");
+    if(window._callSetupTimer) clearTimeout(window._callSetupTimer);
   };
 
   useEffect(() => {
@@ -182,15 +183,20 @@ const Chat = () => {
       });
       if (message.sender !== storedUser.username) {
         newSocket.emit('markDelivered', message.id);
-        if (document.hasFocus()) {
+        if (document.hasFocus() || document.visibilityState === 'visible') {
            newSocket.emit('markRead', message.id);
         } else {
            // Show browser notification
-           if (Notification.permission === 'granted') {
-             new Notification(`New message from ${message.sender}`, {
-               body: message.text || (message.type === 'image' ? 'Image' : 'Attachment'),
-               icon: '/favicon.png'
-             });
+           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+             try {
+               new Notification(`New message from ${message.sender}`, {
+                 body: message.text || (message.type === 'image' ? 'Image' : 'Attachment'),
+                 icon: '/favicon.png',
+                 badge: '/favicon.png',
+                 tag: 'new-message',
+                 renotify: true
+               });
+             } catch(e) { console.error('Notify failed', e); }
            }
         }
       }
@@ -270,11 +276,14 @@ const Chat = () => {
       window.stopCallingInternal();
     });
 
-    setSocket(newSocket);
+    // Socket Keep-Alive for Mobile
+    const keepAlive = setInterval(() => { if(newSocket.connected) newSocket.emit('ping'); }, 20000);
 
+    setSocket(newSocket);
     window.stopCallingInternal = cleanupCall;
 
     return () => {
+      clearInterval(keepAlive);
       window.removeEventListener('focus', handleFocus);
       if(window.stopCallingInternal) window.stopCallingInternal();
       newSocket.close();
@@ -297,8 +306,23 @@ const Chat = () => {
       localStreamRef.current = mediaStream;
       setLocalStreamState(mediaStream);
       
-      const peer = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      const peer = new RTCPeerConnection({ 
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          { urls: 'stun:stun2.l.google.com:19302' }
+        ] 
+      });
       peerConnectionRef.current = peer;
+
+      // Add a 20-second timeout to check if call connects
+      const callTimer = setTimeout(() => {
+        if (!callAccepted) {
+            alert('Call timed out. The other person might be experiencing connection issues.');
+            endCall();
+        }
+      }, 20000);
+      window._callSetupTimer = callTimer;
 
       mediaStream.getTracks().forEach(track => peer.addTrack(track, mediaStream));
 

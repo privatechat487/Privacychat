@@ -42,10 +42,16 @@ app.use(express.json({ limit: '50mb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const httpServer = createServer(app);
+
+// Optimize server for persistent connections to prevent 502 Bad Gateway
+httpServer.keepAliveTimeout = 65000; 
+httpServer.headersTimeout = 66000;
+
 const io = new Server(httpServer, {
-  cors: {
-    origin: '*',
-  }
+  cors: { origin: '*' },
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  transports: ['websocket', 'polling']
 });
 
 // Middleware for Socket.io auth
