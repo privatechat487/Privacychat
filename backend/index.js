@@ -253,16 +253,16 @@ io.on('connection', async (socket) => {
       };
       
       ephemeralMessages.push(savedMessage);
-      // Send message to other users
-      socket.broadcast.emit('receiveMessage', savedMessage);
+      // Broadcast to everyone (including sender)
+      io.emit('receiveMessage', savedMessage);
       
-      // Determine recipient and send Push
+      // Push notifications for background/mobile
       const db = await getDb();
       const usersRows = await db.all('SELECT username FROM users');
-      const target = usersRows.find(u => u.username !== username)?.username;
+      const targetUser = usersRows.find(u => u.username !== username)?.username;
       
-      if (target) {
-        sendPush(target, `New message from ${username}`, text || (type === 'image' ? 'Image' : 'Attachment'));
+      if (targetUser) {
+        sendPush(targetUser, `New message from ${username}`, text || (type === 'image' ? 'Image' : 'Attachment'));
       }
 
       // Auto-delete after 3 minutes
