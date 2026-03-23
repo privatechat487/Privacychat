@@ -29,6 +29,12 @@ export const initDb = async () => {
       timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY(sender_id) REFERENCES users(id)
     );
+
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT,
+      subscription JSON
+    );
   `);
   
   return db;

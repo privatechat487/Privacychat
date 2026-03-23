@@ -16,6 +16,18 @@ const STICKERS = [
 ];
 
 const BACKEND_URL = import.meta.env.PROD ? '' : `http://${window.location.hostname}:5000`;
+const VAPID_PUBLIC_KEY = 'BNZ-a2S8rXae5d46RRXs4ZXhW6u8en8Rz9Q87r9V9B0jQFCti3vaC0COWw4fKvd2qXW0412_Gs2Af8aGH56PFzU';
+
+function urlBase64ToUint8Array(base64String) {
+  const padding = '='.repeat((4 - base64String.length % 4) % 4);
+  const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const outputArray = new Uint8Array(rawData.length);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
 
 const Chat = () => {
   const [socket, setSocket] = useState(null);
@@ -127,6 +139,30 @@ const Chat = () => {
     }
     
     setUser(storedUser);
+
+    // Subscribe to Push Notifications
+    const subscribeToPush = async () => {
+      try {
+        if ('serviceWorker' in navigator && typeof Notification !== 'undefined') {
+          const registration = await navigator.serviceWorker.ready;
+          const subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+          });
+          
+          await axios.post(`${BACKEND_URL}/api/subscribe`, { subscription }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          console.log('Mobile Push Subscribed');
+        }
+      } catch (e) {
+        console.error('Push Subscription failed', e);
+      }
+    };
+
+    if (Notification.permission === 'granted') {
+      subscribeToPush();
+    }
 
     const fetchMessages = () => {
       axios.get(`${BACKEND_URL}/api/messages`, {

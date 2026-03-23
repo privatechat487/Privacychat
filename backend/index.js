@@ -10,7 +10,20 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { initDb, getDb } from './database.js';
+import webpush from 'web-push';
 
+dotenv.config();
+
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+
+if (VAPID_PUBLIC && VAPID_PRIVATE) {
+  webpush.setVapidDetails(
+    'mailto:support@auraconnect.local',
+    VAPID_PUBLIC,
+    VAPID_PRIVATE
+  );
+}
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -138,6 +151,31 @@ app.post('/api/upload', authMiddleware, upload.single('file'), (req, res) => {
 
 const ephemeralMessages = [];
 
+// Push Subscription
+app.post('/api/subscribe', authMiddleware, async (req, res) => {
+  const { subscription } = req.body;
+  const username = req.user.username;
+  try {
+    const db = await getDb();
+    // Simple: one sub per user or just add it
+    await db.run('INSERT INTO push_subscriptions (username, subscription) VALUES (?, ?)', [username, JSON.stringify(subscription)]);
+    res.status(201).json({});
+  } catch(e) { res.status(500).json({error: e.message}); }
+});
+
+app.post('/api/logout', authMiddleware, async (req, res) => {
+  // Clear subscriptions for this user if needed
+  // For example, delete all subscriptions associated with req.user.username
+  try {
+    const db = await getDb();
+    await db.run('DELETE FROM push_subscriptions WHERE username = ?', [req.user.username]);
+    res.json({ success: true });
+  } catch(e) {
+    console.error('Failed to clear subscriptions on logout:', e);
+    res.status(500).json({ error: 'Failed to clear subscriptions' });
+  }
+});
+
 app.get('/api/messages', authMiddleware, (req, res) => {
   res.json(ephemeralMessages);
 });
@@ -170,6 +208,28 @@ io.on('connection', async (socket) => {
   // Broadcast that this user is online
   io.emit('statusUpdate', { username, status: 'online' });
 
+  // Function to Send Push
+  const sendPush = async (targetUsername, title, body, type = 'message') => {
+    if (!VAPID_PUBLIC || !VAPID_PRIVATE) {
+      console.warn('VAPID keys not configured, push notifications disabled.');
+      return;
+    }
+    const db = await getDb();
+    const rows = await db.all('SELECT subscription FROM push_subscriptions WHERE username = ?', [targetUsername]);
+    rows.forEach(row => {
+      const sub = JSON.parse(row.subscription);
+      webpush.sendNotification(sub, JSON.stringify({ title, body, url: '/' }))
+        .catch(err => { 
+          console.error('Push notification failed:', err);
+          // If subscription is no longer valid (e.g., browser unsubscribed), delete it
+          if(err.statusCode === 410) {
+            db.run('DELETE FROM push_subscriptions WHERE subscription = ?', [row.subscription])
+              .catch(deleteErr => console.error('Failed to delete expired subscription:', deleteErr));
+          }
+        });
+    });
+  };
+
   socket.on('sendMessage', async (msgData) => {
     // msgData: { text, type, attachmentUrl, fileName }
     try {
@@ -193,7 +253,17 @@ io.on('connection', async (socket) => {
       };
       
       ephemeralMessages.push(savedMessage);
-      io.emit('receiveMessage', savedMessage);
+      // Send message to other users
+      socket.broadcast.emit('receiveMessage', savedMessage);
+      
+      // Determine recipient and send Push
+      const db = await getDb();
+      const usersRows = await db.all('SELECT username FROM users');
+      const target = usersRows.find(u => u.username !== username)?.username;
+      
+      if (target) {
+        sendPush(target, `New message from ${username}`, text || (type === 'image' ? 'Image' : 'Attachment'));
+      }
 
       // Auto-delete after 3 minutes
       setTimeout(() => {
@@ -254,16 +324,15 @@ io.on('connection', async (socket) => {
     if (targetUsername && onlineUsers.has(targetUsername)) {
       // If target is online, broadcast the call
       socket.broadcast.emit('callIncoming', { from: username, offer: data.offer, isVideo: data.isVideo });
+      sendPush(targetUsername, `Incoming ${data.isVideo ? 'Video' : 'Voice'} Call`, `${username} is calling you...`);
     } else {
        // Log as a missed call message in DB
        getDb().then(db => {
          const msgText = `Missed ${data.isVideo ? 'Video' : 'Voice'} Call from ${username}`;
-         // For simplicity, we'll store this as a system message.
-         // In a real app, you might want a dedicated 'missed_calls' table or a more complex message structure.
          db.run('INSERT INTO messages (sender, text, type, timestamp, status) VALUES (?, ?, ?, ?, ?)', 
             [username, msgText, 'system', new Date().toISOString(), 'sent']);
-         // Notify the sender that the person is offline
-         socket.emit('callEnded', { reason: 'User offline' }); // Inform the caller that the call ended because the user is offline
+         sendPush(targetUsername, `Missed Call`, `${username} attempted to call you.`);
+         socket.emit('callEnded', { reason: 'User offline' });
        }).catch(e => console.error("Failed to log missed call:", e));
     }
   });
