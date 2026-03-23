@@ -145,6 +145,10 @@ const Chat = () => {
       try {
         if ('serviceWorker' in navigator && typeof Notification !== 'undefined') {
           const registration = await navigator.serviceWorker.ready;
+          if (!registration.pushManager) {
+            console.warn('PushManager not supported on this browser');
+            return;
+          }
           const subscription = await registration.pushManager.subscribe({
             userVisibleOnly: true,
             applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
@@ -160,7 +164,7 @@ const Chat = () => {
       }
     };
 
-    if (Notification.permission === 'granted') {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       subscribeToPush();
     }
 
