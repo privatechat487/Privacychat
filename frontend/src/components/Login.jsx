@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
-const BACKEND_URL = import.meta.env.PROD ? '' : 'http://localhost:5000';
+const BACKEND_URL = import.meta.env.PROD ? '' : `http://${window.location.hostname}:5000`;
 
 const Login = () => {
   const [username, setUsername] = useState('');

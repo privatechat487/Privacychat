@@ -15,7 +15,7 @@ const STICKERS = [
   { id: 'l5', url: 'https://media.tenor.com/x785JatZ3vsAAAAC/happy-love.gif' }
 ];
 
-const BACKEND_URL = import.meta.env.PROD ? '' : 'http://localhost:5000';
+const BACKEND_URL = import.meta.env.PROD ? '' : `http://${window.location.hostname}:5000`;
 
 const Chat = () => {
   const [socket, setSocket] = useState(null);
@@ -41,8 +41,8 @@ const Chat = () => {
     };
     document.addEventListener('click', handleClickOutside);
     
-    // Notification Permission
-    if (Notification.permission === 'default') {
+    // Notification Permission Check (Safety for Mobile)
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission();
     }
 
@@ -143,7 +143,11 @@ const Chat = () => {
       });
       setUsers(userMap);
       setStatuses(prev => ({ ...prev, ...statusMap }));
-    }).catch(err => console.error("Failed to load users:", err));
+    }).catch(err => {
+       console.error("Failed to load users:", err);
+       // If backend is unreachable, it sometimes leads to blank page due to logic waiting for users
+       setUsers({ [storedUser.username]: storedUser.profilePic }); 
+    });
 
     const newSocket = io(BACKEND_URL, {
       auth: { token }
