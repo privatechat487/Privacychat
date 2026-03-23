@@ -14,7 +14,9 @@ export const initDb = async () => {
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       username TEXT UNIQUE,
-      passcode TEXT
+      passcode TEXT,
+      profile_pic TEXT,
+      last_seen DATETIME
     );
     
     CREATE TABLE IF NOT EXISTS messages (

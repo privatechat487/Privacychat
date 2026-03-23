@@ -35,8 +35,8 @@ const Login = () => {
 
   return (
     <div className="auth-container">
-      <h1 className="auth-title">ViRaj Connect</h1>
-      <p style={{textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '10px'}}>Vimal & Rajini's Private Space</p>
+      <h1 className="auth-title">Aura Connect</h1>
+      <p style={{textAlign: 'center', color: 'var(--text-secondary)', marginBottom: '10px'}}>Vimal and Roy's Private Space</p>
       
       {error && <div className="error-msg">{error}</div>}
       
@@ -50,7 +50,7 @@ const Login = () => {
           >
             <option value="" disabled>Select your name...</option>
             <option value="Vimal">Vimal</option>
-            <option value="Raj">Raj</option>
+            <option value="Roy">Roy</option>
           </select>
         </div>
         
@@ -66,7 +66,7 @@ const Login = () => {
         </div>
         
         <button type="submit" className="auth-btn" disabled={loading}>
-          {loading ? 'Entering...' : 'Enter ViRaj Connect'}
+          {loading ? 'Entering...' : 'Enter Aura Connect'}
         </button>
       </form>
     </div>
